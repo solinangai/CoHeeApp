@@ -1,8 +1,7 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import { MenuItem, CartItem, Order, Product } from '../types';
-import { useAuth } from './AuthContext'; 
+import { useAuth } from './AuthContext';
 
-// ADD this new interface for market products
 interface MarketCartItem {
   product: Product;
   quantity: number;
@@ -10,38 +9,80 @@ interface MarketCartItem {
 
 interface AppContextType {
   cart: CartItem[];
-  marketCart: MarketCartItem[];  // ADD THIS LINE
+  marketCart: MarketCartItem[];
   orders: Order[];
   loyaltyPoints: number;
   hkstpDiscount: boolean;
   toastMessage: string;
   addToCart: (item: MenuItem) => void;
-  addProductToCart: (product: Product) => void;  // ADD THIS LINE
+  addProductToCart: (product: Product) => void;
   removeFromCart: (itemId: string) => void;
-  removeProductFromCart: (productId: string) => void;  // ADD THIS LINE
+  removeProductFromCart: (productId: string) => void;
   updateQuantity: (itemId: string, quantity: number) => void;
-  updateProductQuantity: (productId: string, quantity: number) => void;  // ADD THIS LINE
+  updateProductQuantity: (productId: string, quantity: number) => void;
   clearCart: () => void;
-  clearMarketCart: () => void;  // ADD THIS LINE
+  clearMarketCart: () => void;
   toggleDiscount: () => void;
-  createOrder: (order: Order) => void;
+  createOrder: (order: Order) => Promise<void>;
   showToast: (message: string) => void;
   getCartTotal: () => number;
-  getMarketCartTotal: () => number;  // ADD THIS LINE
+  getMarketCartTotal: () => number;
   getCartCount: () => number;
+  getUserActiveOrders: () => Order[];
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export function AppProvider({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
+  
   const [cart, setCart] = useState<CartItem[]>([]);
-  const [marketCart, setMarketCart] = useState<MarketCartItem[]>([]);  // ADD THIS LINE
+  const [marketCart, setMarketCart] = useState<MarketCartItem[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [loyaltyPoints, setLoyaltyPoints] = useState(0);
   const [hkstpDiscount, setHkstpDiscount] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
 
-  // Existing food cart functions
+  useEffect(() => {
+    if (user) {
+      loadUserOrders();
+      setLoyaltyPoints(user.loyaltyPoints || 0);
+    } else {
+      setOrders([]);
+      setLoyaltyPoints(0);
+    }
+  }, [user?.id]);
+
+  const loadUserOrders = async () => {
+    if (!user) return;
+    
+    try {
+      const { dbHelpers } = await import('../utils/supabase');
+      const { data, error } = await dbHelpers.getUserOrders(user.id);
+      
+      if (!error && data) {
+        const userOrders = data.map((order: any) => ({
+          id: order.id,
+          customer: order.customer_name,
+          customerId: order.user_id,
+          items: order.items,
+          subtotal: parseFloat(order.subtotal),
+          discount: parseFloat(order.discount || 0),
+          total: parseFloat(order.total),
+          status: order.status,
+          pickupTime: order.pickup_time || '',
+          specialInstructions: order.special_instructions,
+          createdAt: new Date(order.created_at),
+          paymentMethod: order.payment_method,
+        }));
+        
+        setOrders(userOrders);
+      }
+    } catch (error) {
+      console.log('Using local storage for orders');
+    }
+  };
+
   const addToCart = (item: MenuItem) => {
     const existingItem = cart.find(i => i.id === item.id);
     
@@ -58,9 +99,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     showToast(`✓ ${item.name} added to cart`);
   };
 
- 
-  
- // ADD: Market product cart functions
   const addProductToCart = (product: Product) => {
     const existingProduct = marketCart.find(p => p.product.id === product.id);
     
@@ -82,7 +120,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     showToast('Item removed from cart');
   };
 
-  // ADD: Remove product from market cart
   const removeProductFromCart = (productId: string) => {
     setMarketCart(marketCart.filter(p => p.product.id !== productId));
     showToast('Product removed from cart');
@@ -98,7 +135,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // ADD: Update product quantity
   const updateProductQuantity = (productId: string, quantity: number) => {
     if (quantity === 0) {
       removeProductFromCart(productId);
@@ -113,7 +149,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setCart([]);
   };
 
-  // ADD: Clear market cart
   const clearMarketCart = () => {
     setMarketCart([]);
   };
@@ -122,9 +157,47 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setHkstpDiscount(!hkstpDiscount);
   };
 
-  const createOrder = (order: Order) => {
-    setOrders([order, ...orders]);
-    setLoyaltyPoints(loyaltyPoints + 1);
+  const createOrder = async (order: Order) => {
+    if (!user) {
+      showToast('Please login to place an order');
+      return;
+    }
+
+    const orderWithUser = {
+      ...order,
+      customerId: user.id,
+      customer: user.name,
+    };
+
+    try {
+      const { dbHelpers } = await import('../utils/supabase');
+      await dbHelpers.createOrder({
+        id: orderWithUser.id,
+        user_id: user.id,
+        customer_name: user.name,
+        items: orderWithUser.items,
+        subtotal: orderWithUser.subtotal,
+        discount: orderWithUser.discount,
+        total: orderWithUser.total,
+        status: orderWithUser.status,
+        pickup_time: orderWithUser.pickupTime,
+        payment_method: orderWithUser.paymentMethod,
+        special_instructions: orderWithUser.specialInstructions,
+      });
+
+      setOrders([orderWithUser, ...orders]);
+      
+      const newPoints = loyaltyPoints + 1;
+      setLoyaltyPoints(newPoints);
+      
+      await dbHelpers.updateUser(user.id, { loyalty_points: newPoints });
+      
+    } catch (error) {
+      console.error('Failed to create order:', error);
+      setOrders([orderWithUser, ...orders]);
+      setLoyaltyPoints(loyaltyPoints + 1);
+    }
+
     clearCart();
     setHkstpDiscount(false);
   };
@@ -142,7 +215,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return subtotal - discount;
   };
 
-  // ADD: Get market cart total
   const getMarketCartTotal = () => {
     return marketCart.reduce((sum, item) => 
       sum + (item.product.price * item.quantity), 0
@@ -154,29 +226,41 @@ export function AppProvider({ children }: { children: ReactNode }) {
            marketCart.reduce((sum, item) => sum + item.quantity, 0);
   };
 
+  const getUserActiveOrders = () => {
+    if (!user) return [];
+    
+    return orders.filter(
+      order => 
+        order.customerId === user.id &&
+        order.status !== 'completed' && 
+        order.status !== 'cancelled'
+    );
+  };
+
   return (
     <AppContext.Provider
       value={{
         cart,
-        marketCart,  // ADD THIS LINE
-        orders,
+        marketCart,
+        orders: orders.filter(o => !user || o.customerId === user.id),
         loyaltyPoints,
         hkstpDiscount,
         toastMessage,
         addToCart,
-        addProductToCart,  // ADD THIS LINE
+        addProductToCart,
         removeFromCart,
-        removeProductFromCart,  // ADD THIS LINE
+        removeProductFromCart,
         updateQuantity,
-        updateProductQuantity,  // ADD THIS LINE
+        updateProductQuantity,
         clearCart,
-        clearMarketCart,  // ADD THIS LINE
+        clearMarketCart,
         toggleDiscount,
         createOrder,
         showToast,
         getCartTotal,
-        getMarketCartTotal,  // ADD THIS LINE
+        getMarketCartTotal,
         getCartCount,
+        getUserActiveOrders,
       }}
     >
       {children}

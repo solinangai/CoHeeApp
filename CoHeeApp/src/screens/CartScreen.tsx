@@ -248,8 +248,6 @@ export default function CartScreen({ onNavigate }: Props) {
             <TouchableOpacity
               style={styles.marketCheckoutButton}
               onPress={() => {
-                // Handle market checkout
-                // For now, just show a toast
                 alert('Market checkout coming soon!');
               }}
             >

@@ -1,13 +1,15 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import { User } from '../types';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { supabase, dbHelpers } from '../utils/supabase';
+import { Alert } from 'react-native';
 
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<boolean>;
-  register: (name: string, email: string, password: string, phone?: string) => Promise<boolean>;
+  register: (name: string, email: string, password: string, phone?: string, isHKSTPStaff?: boolean) => Promise<boolean>;
   logout: () => Promise<void>;
   updateUser: (updates: Partial<User>) => void;
 }
@@ -20,6 +22,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     loadUser();
+    checkSupabaseSession();
   }, []);
 
   const loadUser = async () => {
@@ -35,6 +38,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const checkSupabaseSession = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        const { data: dbUser } = await dbHelpers.getUserByEmail(session.user.email!);
+        if (dbUser) {
+          const userData: User = {
+            id: dbUser.id,
+            email: dbUser.email,
+            name: dbUser.name,
+            phone: dbUser.phone,
+            isHKSTPStaff: dbUser.is_hkstp_staff,
+            loyaltyPoints: dbUser.loyalty_points,
+            createdAt: new Date(dbUser.created_at),
+          };
+          saveUser(userData);
+        }
+      }
+    } catch (error) {
+      console.log('No active session');
+    }
+  };
+
   const saveUser = async (userData: User) => {
     try {
       await AsyncStorage.setItem('user', JSON.stringify(userData));
@@ -46,46 +72,107 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (email: string, password: string): Promise<boolean> => {
     try {
-      // TODO: Replace with actual API call
-      // For now, simulate login
-      const mockUser: User = {
-        id: Date.now().toString(),
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
-        name: email.split('@')[0],
-        loyaltyPoints: 0,
-        createdAt: new Date(),
-      };
-      
-      await saveUser(mockUser);
-      return true;
+        password,
+      });
+
+      if (error) {
+        Alert.alert('Login Failed', error.message);
+        return false;
+      }
+
+      if (data.user) {
+        const { data: dbUser } = await dbHelpers.getUserByEmail(email);
+        
+        if (dbUser) {
+          const userData: User = {
+            id: dbUser.id,
+            email: dbUser.email,
+            name: dbUser.name,
+            phone: dbUser.phone,
+            isHKSTPStaff: dbUser.is_hkstp_staff,
+            loyaltyPoints: dbUser.loyalty_points,
+            createdAt: new Date(dbUser.created_at),
+          };
+          
+          await saveUser(userData);
+          return true;
+        }
+      }
+
+      return false;
     } catch (error) {
       console.error('Login failed:', error);
+      Alert.alert('Error', 'An unexpected error occurred');
       return false;
     }
   };
 
-  const register = async (name: string, email: string, password: string, phone?: string): Promise<boolean> => {
+  const register = async (
+    name: string,
+    email: string,
+    password: string,
+    phone?: string,
+    isHKSTPStaff?: boolean
+  ): Promise<boolean> => {
     try {
-      // TODO: Replace with actual API call
-      const newUser: User = {
-        id: Date.now().toString(),
+      const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
-        name,
-        phone,
-        loyaltyPoints: 0,
-        createdAt: new Date(),
-      };
-      
-      await saveUser(newUser);
-      return true;
+        password,
+        options: {
+          data: { name },
+        },
+      });
+
+      if (authError) {
+        Alert.alert('Registration Failed', authError.message);
+        return false;
+      }
+
+      if (authData.user) {
+        const { data: dbUser } = await dbHelpers.createUser({
+          email,
+          name,
+          phone,
+          is_hkstp_staff: isHKSTPStaff,
+          auth_provider: 'email',
+        });
+
+        if (dbUser) {
+          const userData: User = {
+            id: dbUser.id,
+            email: dbUser.email,
+            name: dbUser.name,
+            phone: dbUser.phone,
+            isHKSTPStaff: dbUser.is_hkstp_staff,
+            loyaltyPoints: 0,
+            createdAt: new Date(),
+          };
+
+          await saveUser(userData);
+
+          Alert.alert(
+            'Verify Your Email',
+            'We\'ve sent a verification link to your email. Please verify to continue.',
+            [{ text: 'OK' }]
+          );
+
+          return true;
+        }
+      }
+
+      return false;
     } catch (error) {
       console.error('Registration failed:', error);
+      Alert.alert('Error', 'An unexpected error occurred');
       return false;
     }
   };
 
   const logout = async () => {
     try {
+      await supabase.auth.signOut();
       await AsyncStorage.removeItem('user');
       setUser(null);
     } catch (error) {
@@ -97,6 +184,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (user) {
       const updatedUser = { ...user, ...updates };
       saveUser(updatedUser);
+      dbHelpers.updateUser(user.id, updates);
     }
   };
 

@@ -5,9 +5,9 @@ import {
   ScrollView,
   TouchableOpacity,
   StyleSheet,
-  FlatList,
 } from 'react-native';
 import { useApp } from '../contexts/AppContext';
+import { useAuth } from '../contexts/AuthContext';
 import { FEATURED_ITEMS, CATEGORIES } from '../data/menuData';
 
 interface Props {
@@ -15,12 +15,10 @@ interface Props {
 }
 
 export default function HomeScreen({ onNavigate }: Props) {
-  const { addToCart, orders } = useApp();
+  const { addToCart, getUserActiveOrders } = useApp();
+  const { user } = useAuth();
 
-  // Get active orders (not completed or cancelled)
-  const activeOrders = orders.filter(
-    order => order.status !== 'completed' && order.status !== 'cancelled'
-  );
+  const activeOrders = getUserActiveOrders();
 
   const getOrderStatusMessage = (status: string) => {
     switch (status) {
@@ -54,8 +52,8 @@ export default function HomeScreen({ onNavigate }: Props) {
 
   return (
     <ScrollView style={styles.container}>
-      {/* Active Order Banner */}
-      {activeOrders.length > 0 && (
+      {/* Active Order Banner - Only for logged-in users with active orders */}
+      {user && activeOrders.length > 0 && (
         <TouchableOpacity
           style={styles.orderBanner}
           onPress={() => onNavigate('orderStatus')}
@@ -64,14 +62,14 @@ export default function HomeScreen({ onNavigate }: Props) {
           <View style={styles.orderBannerContent}>
             <View style={styles.orderBannerLeft}>
               <Text style={styles.orderBannerIcon}>
-                {getOrderStatusIcon(activeOrders[0].status)}
+                {getOrderStatusIcon(activeOrders[0]?.status || 'pending')}
               </Text>
               <View style={styles.orderBannerText}>
                 <Text style={styles.orderBannerTitle}>
-                  Order {activeOrders[0].id}
+                  Order {activeOrders[0]?.id}
                 </Text>
                 <Text style={styles.orderBannerSubtitle}>
-                  {getOrderStatusMessage(activeOrders[0].status)}
+                  {getOrderStatusMessage(activeOrders[0]?.status || 'pending')}
                 </Text>
               </View>
             </View>
@@ -211,7 +209,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F5F5F5',
   },
-  // Order Banner Styles
   orderBanner: {
     backgroundColor: '#2C1810',
     marginHorizontal: 20,
@@ -266,7 +263,6 @@ const styles = StyleSheet.create({
     color: '#D4A574',
     textAlign: 'center',
   },
-  // Existing styles
   header: {
     padding: 20,
     paddingBottom: 10,

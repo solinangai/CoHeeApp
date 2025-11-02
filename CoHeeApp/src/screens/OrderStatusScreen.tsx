@@ -8,26 +8,29 @@ import {
   Animated,
 } from 'react-native';
 import { useApp } from '../contexts/AppContext';
+import { useAuth } from '../contexts/AuthContext';
 import { Order, OrderStatus } from '../types';
 
 interface Props {
-  onNavigate: (screen: any) => void;
+  onNavigate: (screen: string) => void;
 }
 
 export default function OrderStatusScreen({ onNavigate }: Props) {
-  const { orders } = useApp();
+  const { getUserActiveOrders } = useApp();
+  const { user } = useAuth();
   const [currentOrder, setCurrentOrder] = useState<Order | null>(null);
   const [progressAnim] = useState(new Animated.Value(0));
 
   useEffect(() => {
-    // Get the most recent order
-    if (orders.length > 0) {
-      setCurrentOrder(orders[0]);
+    const activeOrders = getUserActiveOrders();
+    if (activeOrders.length > 0) {
+      setCurrentOrder(activeOrders[0]);
+    } else {
+      setCurrentOrder(null);
     }
-  }, [orders]);
+  }, [user]);
 
   useEffect(() => {
-    // Animate progress based on order status
     if (currentOrder) {
       const progress = getStatusProgress(currentOrder.status);
       Animated.timing(progressAnim, {
@@ -88,11 +91,32 @@ export default function OrderStatusScreen({ onNavigate }: Props) {
     }
   };
 
+  if (!user) {
+    return (
+      <View style={styles.emptyContainer}>
+        <Text style={styles.emptyIcon}>🔐</Text>
+        <Text style={styles.emptyTitle}>Please Login</Text>
+        <Text style={styles.emptyText}>
+          You need to be logged in to view order status
+        </Text>
+        <TouchableOpacity
+          style={styles.shopButton}
+          onPress={() => onNavigate('login')}
+        >
+          <Text style={styles.shopButtonText}>Login</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
   if (!currentOrder) {
     return (
       <View style={styles.emptyContainer}>
         <Text style={styles.emptyIcon}>🛒</Text>
-        <Text style={styles.emptyText}>No active orders</Text>
+        <Text style={styles.emptyTitle}>No active orders</Text>
+        <Text style={styles.emptyText}>
+          You don't have any active orders at the moment
+        </Text>
         <TouchableOpacity
           style={styles.shopButton}
           onPress={() => onNavigate('menu')}
@@ -164,6 +188,10 @@ export default function OrderStatusScreen({ onNavigate }: Props) {
 
         <View style={styles.orderInfo}>
           <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Customer</Text>
+            <Text style={styles.infoValue}>{currentOrder.customer}</Text>
+          </View>
+          <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Pickup Time</Text>
             <Text style={styles.infoValue}>{currentOrder.pickupTime}</Text>
           </View>
@@ -194,6 +222,7 @@ export default function OrderStatusScreen({ onNavigate }: Props) {
         <Text style={styles.locationTitle}>📍 Pickup Location</Text>
         <Text style={styles.locationAddress}>Building 17W</Text>
         <Text style={styles.locationSubtext}>Hong Kong Science Park</Text>
+        <Text style={styles.locationSubtext}>Pak Shek Kok, New Territories</Text>
       </View>
 
       {/* Action Button */}
@@ -207,7 +236,9 @@ export default function OrderStatusScreen({ onNavigate }: Props) {
       ) : (
         <TouchableOpacity
           style={styles.helpButton}
-          onPress={() => {}}
+          onPress={() => {
+            // TODO: Add help/support functionality
+          }}
         >
           <Text style={styles.helpButtonText}>Need Help?</Text>
         </TouchableOpacity>
@@ -405,14 +436,22 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 40,
+    backgroundColor: '#F5F5F5',
   },
   emptyIcon: {
     fontSize: 64,
     marginBottom: 20,
   },
+  emptyTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#2C1810',
+    marginBottom: 12,
+  },
   emptyText: {
-    fontSize: 18,
+    fontSize: 16,
     color: '#666',
+    textAlign: 'center',
     marginBottom: 30,
   },
   shopButton: {
