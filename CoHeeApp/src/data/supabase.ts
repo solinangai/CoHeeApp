@@ -1,0 +1,71 @@
+import { createClient } from '@supabase/supabase-js';
+
+const SUPABASE_URL = 'https://hmmfgqmkitmggbcphabd.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhtbWZncW1raXRtZ2diY3BoYWJkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE3NjExMDMsImV4cCI6MjA3NzMzNzEwM30.M_PSY0AHavV0dVrYdhSK3VeKquut_9obmbGJibtAUDA';
+
+export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// Database helper functions
+export const dbHelpers = {
+  // Check if user exists
+  async getUserByEmail(email: string) {
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('email', email)
+      .single();
+    
+    return { data, error };
+  },
+
+  // Create new user
+  async createUser(userData: {
+    email: string;
+    name: string;
+    phone?: string;
+    is_hkstp_staff?: boolean;
+    auth_provider?: string;
+  }) {
+    const { data, error } = await supabase
+      .from('users')
+      .insert([userData])
+      .select()
+      .single();
+    
+    return { data, error };
+  },
+
+  // Update user
+  async updateUser(userId: string, updates: any) {
+    const { data, error } = await supabase
+      .from('users')
+      .update(updates)
+      .eq('id', userId)
+      .select()
+      .single();
+    
+    return { data, error };
+  },
+
+  // Create order
+  async createOrder(orderData: any) {
+    const { data, error } = await supabase
+      .from('orders')
+      .insert([orderData])
+      .select()
+      .single();
+    
+    return { data, error };
+  },
+
+  // Get user orders
+  async getUserOrders(userId: string) {
+    const { data, error } = await supabase
+      .from('orders')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+    
+    return { data, error };
+  },
+
+};
