@@ -23,24 +23,29 @@ export default function LoginScreen({ onNavigate }: Props) {
   const [error, setError] = useState('');
 
   const handleLogin = async () => {
-    if (!email || !password) {
-      setError('Please enter both email and password');
-      return;
-    }
+  if (!email || !password) {
+    setError('Please enter both email and password');
+    return;
+  }
 
-    setIsLoading(true);
-    setError('');
+  setIsLoading(true);
+  setError('');
 
-    const success = await login(email, password);
-    
-    setIsLoading(false);
+  console.log('LOGIN ATTEMPT', { email, password });
 
-    if (success) {
-      onNavigate('home');
-    } else {
-      setError('Invalid email or password');
-    }
-  };
+  const success = await login(email.trim(), password.trim());
+
+  console.log('LOGIN RESULT', { success });
+
+  setIsLoading(false);
+
+  if (success) {
+    onNavigate('home');
+  } else {
+    setError('Invalid email or password');
+  }
+};
+
 
   return (
     <KeyboardAvoidingView 
@@ -225,3 +230,4 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 });
+

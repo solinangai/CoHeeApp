@@ -71,104 +71,118 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const login = async (email: string, password: string): Promise<boolean> => {
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+  try {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
 
-      if (error) {
-        Alert.alert('Login Failed', error.message);
-        return false;
-      }
+    console.log('AUTH LOGIN RESULT', { data, error });
 
-      if (data.user) {
+    if (error) {
+      Alert.alert('Login Failed', error.message);
+      return false;
+    }
+    
+    console.log('LOOKING FOR USER BY EMAIL', email);
+    const { data: dbUser } = await dbHelpers.getUserByEmail(email);
+    console.log('DB USER RESULT', { dbUser });
+
+    if (data.user) {
         const { data: dbUser } = await dbHelpers.getUserByEmail(email);
-        
-        if (dbUser) {
-          const userData: User = {
-            id: dbUser.id,
-            email: dbUser.email,
-            name: dbUser.name,
-            phone: dbUser.phone,
-            isHKSTPStaff: dbUser.is_hkstp_staff,
-            loyaltyPoints: dbUser.loyalty_points,
-            createdAt: new Date(dbUser.created_at),
-          };
-          
-          await saveUser(userData);
-          return true;
-        }
-      }
 
-      return false;
-    } catch (error) {
-      console.error('Login failed:', error);
-      Alert.alert('Error', 'An unexpected error occurred');
+      console.log('DB USER RESULT', { dbUser });
+
+      if (dbUser) {
+        const userData: User = {
+          id: dbUser.id,
+          email: dbUser.email,
+          name: dbUser.name,
+          phone: dbUser.phone,
+          isHKSTPStaff: dbUser.is_hkstp_staff,
+          loyaltyPoints: dbUser.loyalty_points,
+          createdAt: new Date(dbUser.created_at),
+        };
+
+        await saveUser(userData);
+        return true;
+      }
+    }
+
+    return false;
+  } catch (error) {
+    console.error('Login failed:', error);
+    Alert.alert('Error', 'An unexpected error occurred');
+    return false;
+  }
+};
+
+
+const register = async (
+  name: string,
+  email: string,
+  password: string,
+  phone?: string,
+  isHKSTPStaff?: boolean
+): Promise<boolean> => {
+  try {
+    console.log('REGISTER ATTEMPT', { name, email });
+
+    const { data: authData, error: authError } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: { name },
+      },
+    });
+
+    console.log('REGISTER RESULT', { authData, authError });
+
+    if (authError) {
+      Alert.alert('Registration Failed', authError.message);
       return false;
     }
-  };
 
-  const register = async (
-    name: string,
-    email: string,
-    password: string,
-    phone?: string,
-    isHKSTPStaff?: boolean
-  ): Promise<boolean> => {
-    try {
-      const { data: authData, error: authError } = await supabase.auth.signUp({
+    if (authData.user) {
+      const { data: dbUser } = await dbHelpers.createUser({
         email,
-        password,
-        options: {
-          data: { name },
-        },
+        name,
+        phone,
+        is_hkstp_staff: isHKSTPStaff,
+        auth_provider: 'email',
       });
 
-      if (authError) {
-        Alert.alert('Registration Failed', authError.message);
-        return false;
+      if (dbUser) {
+        const userData: User = {
+          id: dbUser.id,
+          email: dbUser.email,
+          name: dbUser.name,
+          phone: dbUser.phone,
+          isHKSTPStaff: dbUser.is_hkstp_staff,
+          loyaltyPoints: 0,
+          createdAt: new Date(),
+        };
+
+        await saveUser(userData);
+
+        Alert.alert(
+          'Verify Your Email',
+          'We\'ve sent a verification link to your email. Please verify to continue.',
+          [{ text: 'OK' }]
+        );
+
+        return true;
       }
-
-      if (authData.user) {
-        const { data: dbUser } = await dbHelpers.createUser({
-          email,
-          name,
-          phone,
-          is_hkstp_staff: isHKSTPStaff,
-          auth_provider: 'email',
-        });
-
-        if (dbUser) {
-          const userData: User = {
-            id: dbUser.id,
-            email: dbUser.email,
-            name: dbUser.name,
-            phone: dbUser.phone,
-            isHKSTPStaff: dbUser.is_hkstp_staff,
-            loyaltyPoints: 0,
-            createdAt: new Date(),
-          };
-
-          await saveUser(userData);
-
-          Alert.alert(
-            'Verify Your Email',
-            'We\'ve sent a verification link to your email. Please verify to continue.',
-            [{ text: 'OK' }]
-          );
-
-          return true;
-        }
-      }
-
-      return false;
-    } catch (error) {
-      console.error('Registration failed:', error);
-      Alert.alert('Error', 'An unexpected error occurred');
-      return false;
     }
-  };
+
+    return false;
+  } catch (error) {
+    console.error('Registration failed:', error);
+    Alert.alert('Error', 'An unexpected error occurred');
+    return false;
+  }
+};
+
 
   const logout = async () => {
     try {

@@ -28,42 +28,53 @@ export default function RegisterScreen({ onNavigate }: Props) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const handleRegister = async () => {
-    // Validation
-    if (!name || !email || !password) {
-      setError('Please fill in all required fields');
-      return;
-    }
+  
+const handleRegister = async () => {
+  // Validation
+  if (!name || !email || !password) {
+    setError('Please fill in all required fields');
+    return;
+  }
 
-    if (password !== confirmPassword) {
-      setError('Passwords do not match');
-      return;
-    }
+  if (password !== confirmPassword) {
+    setError('Passwords do not match');
+    return;
+  }
 
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters');
-      return;
-    }
+  if (password.length < 6) {
+    setError('Password must be at least 6 characters');
+    return;
+  }
 
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      setError('Please enter a valid email address');
-      return;
-    }
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email)) {
+    setError('Please enter a valid email address');
+    return;
+  }
 
-    setIsLoading(true);
-    setError('');
+  setIsLoading(true);
+  setError('');
 
-    const success = await register(name, email, password, phone);
-    
-    setIsLoading(false);
+  console.log('HANDLE REGISTER CALLED', {
+    name,
+    email,
+    phone,
+    isHKSTPStaff,
+  });
 
-    if (success) {
-      onNavigate('home');
-    } else {
-      setError('Registration failed. Please try again.');
-    }
-  };
+  const success = await register(name, email, password, phone, isHKSTPStaff);
+
+  console.log('HANDLE REGISTER RESULT', { success });
+
+  setIsLoading(false);
+
+  if (success) {
+    onNavigate('home');
+  } else {
+    setError('Registration failed. Please try again.');
+  }
+};
+
 
   return (
     <KeyboardAvoidingView 
