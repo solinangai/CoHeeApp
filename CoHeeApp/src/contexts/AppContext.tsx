@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import { MenuItem, CartItem, Order, Product } from '../types';
 import { useAuth } from './AuthContext';
+import { tableService, TableSession } from '../services/table.service';
+import { MENU_ITEMS } from '../data/menuItems';
 
 interface MarketCartItem {
   product: Product;
@@ -14,7 +16,10 @@ interface AppContextType {
   loyaltyPoints: number;
   hkstpDiscount: boolean;
   toastMessage: string;
-  addToCart: (item: MenuItem) => void;
+  toastType: 'success' | 'error' | 'info';
+  currentTableSession: TableSession | null;
+  menuItems: MenuItem[];
+  addToCart: (item: MenuItem, quantity?: number) => void;
   addProductToCart: (product: Product) => void;
   removeFromCart: (itemId: string) => void;
   removeProductFromCart: (productId: string) => void;
@@ -24,11 +29,13 @@ interface AppContextType {
   clearMarketCart: () => void;
   toggleDiscount: () => void;
   createOrder: (order: Order) => Promise<void>;
-  showToast: (message: string) => void;
+  showToast: (message: string, type?: 'success' | 'error' | 'info') => void;
   getCartTotal: () => number;
   getMarketCartTotal: () => number;
   getCartCount: () => number;
   getUserActiveOrders: () => Order[];
+  startTableSession: (tableInfo: any) => Promise<TableSession | null>;
+  endTableSession: () => Promise<boolean>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -42,6 +49,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [loyaltyPoints, setLoyaltyPoints] = useState(0);
   const [hkstpDiscount, setHkstpDiscount] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
+  const [toastType, setToastType] = useState<'success' | 'error' | 'info'>('info');
+  const [currentTableSession, setCurrentTableSession] = useState<TableSession | null>(null);
+  const [menuItems] = useState<MenuItem[]>(MENU_ITEMS);
 
   useEffect(() => {
     if (user) {
@@ -83,20 +93,84 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const addToCart = (item: MenuItem) => {
+  const startTableSession = async (tableInfo: any): Promise<TableSession | null> => {
+    try {
+      let table = null;
+
+      // Try to get table by token
+      if (tableInfo.token) {
+        table = await tableService.verifyTableQR(tableInfo.token);
+      }
+
+      // Try to get table by ID
+      if (!table && tableInfo.tableId) {
+        table = await tableService.getTableById(tableInfo.tableId);
+      }
+
+      // Try to get table by number
+      if (!table && tableInfo.tableNumber) {
+        table = await tableService.getTableByNumber(tableInfo.tableNumber);
+      }
+
+      if (!table) {
+        showToast('Table not found', 'error');
+        return null;
+      }
+
+      // Start session
+      const session = await tableService.startSession(table.id);
+
+      if (session) {
+        setCurrentTableSession(session);
+        // Clear any existing cart for fresh start
+        clearCart();
+        return session;
+      }
+
+      showToast('Failed to start table session', 'error');
+      return null;
+    } catch (error) {
+      console.error('Error starting table session:', error);
+      showToast('Error starting session', 'error');
+      return null;
+    }
+  };
+
+  const endTableSession = async (): Promise<boolean> => {
+    if (!currentTableSession) {
+      return false;
+    }
+
+    try {
+      const success = await tableService.endSession(currentTableSession.id);
+      
+      if (success) {
+        setCurrentTableSession(null);
+        clearCart();
+        return true;
+      }
+
+      showToast('Failed to end session', 'error');
+      return false;
+    } catch (error) {
+      console.error('Error ending table session:', error);
+      showToast('Error ending session', 'error');
+      return false;
+    }
+  };
+
+  const addToCart = (item: MenuItem, quantity: number = 1) => {
     const existingItem = cart.find(i => i.id === item.id);
     
     if (existingItem) {
       setCart(cart.map(i => 
         i.id === item.id 
-          ? { ...i, quantity: i.quantity + 1 } 
+          ? { ...i, quantity: i.quantity + quantity } 
           : i
       ));
     } else {
-      setCart([...cart, { ...item, quantity: 1 }]);
+      setCart([...cart, { ...item, quantity }]);
     }
-    
-    showToast(`✓ ${item.name} added to cart`);
   };
 
   const addProductToCart = (product: Product) => {
@@ -112,17 +186,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setMarketCart([...marketCart, { product, quantity: 1 }]);
     }
     
-    showToast(`✓ ${product.name} added to cart`);
+    showToast(`✓ ${product.name} added to cart`, 'success');
   };
 
   const removeFromCart = (itemId: string) => {
     setCart(cart.filter(i => i.id !== itemId));
-    showToast('Item removed from cart');
+    showToast('Item removed from cart', 'info');
   };
 
   const removeProductFromCart = (productId: string) => {
     setMarketCart(marketCart.filter(p => p.product.id !== productId));
-    showToast('Product removed from cart');
+    showToast('Product removed from cart', 'info');
   };
 
   const updateQuantity = (itemId: string, quantity: number) => {
@@ -159,7 +233,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const createOrder = async (order: Order) => {
     if (!user) {
-      showToast('Please login to place an order');
+      showToast('Please login to place an order', 'error');
       return;
     }
 
@@ -202,8 +276,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setHkstpDiscount(false);
   };
 
-  const showToast = (message: string) => {
+  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
     setToastMessage(message);
+    setToastType(type);
     setTimeout(() => setToastMessage(''), 3000);
   };
 
@@ -246,6 +321,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         loyaltyPoints,
         hkstpDiscount,
         toastMessage,
+        toastType,
+        currentTableSession,
+        menuItems,
         addToCart,
         addProductToCart,
         removeFromCart,
@@ -261,6 +339,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         getMarketCartTotal,
         getCartCount,
         getUserActiveOrders,
+        startTableSession,
+        endTableSession,
       }}
     >
       {children}
