@@ -26,11 +26,9 @@
     "react-native-url-polyfill": "^2.0.0",
     "zustand": "^5.0.3",
     "react-native-paper": "^5.13.0",
-    "react-native-vector-icons": "^10.2.0",
+    "@expo/vector-icons": "^14.0.0",
     "expo-camera": "~16.0.0",
-    "expo-barcode-scanner": "~14.0.0",
     "expo-local-authentication": "~15.0.0",
-    "@stripe/stripe-react-native": "^0.40.3",
     "expo-notifications": "~0.29.0",
     "expo-image-picker": "~16.0.0",
     "date-fns": "^4.1.0",
@@ -44,7 +42,6 @@
     "@typescript-eslint/eslint-plugin": "^8.19.0",
     "@typescript-eslint/parser": "^8.19.0",
     "eslint": "^9.17.0",
-    "eslint-config-expo": "^7.1.0",
     "prettier": "^3.4.2"
   },
   "private": true
