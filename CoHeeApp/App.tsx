@@ -17,7 +17,23 @@ import OrderStatusScreen from './src/screens/OrderStatusScreen';
 import MarketScreen from './src/screens/MarketScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 
-type Screen = 'landing' | 'login' | 'register' | 'home' | 'menu' | 'cart' | 'checkout' | 'orderStatus' | 'market' | 'profile';
+// QR Dine-in Screens
+import QRScanScreen from './src/screens/QRScanScreen';
+import TableOrderScreen from './src/screens/TableOrderScreen';
+
+type Screen = 
+  | 'landing' 
+  | 'login' 
+  | 'register' 
+  | 'home' 
+  | 'menu' 
+  | 'cart' 
+  | 'checkout' 
+  | 'orderStatus' 
+  | 'market' 
+  | 'profile'
+  | 'qrScan'
+  | 'tableOrder';
 
 function AppContent() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -59,6 +75,10 @@ function AppContent() {
         return <MarketScreen />;
       case 'profile':
         return <ProfileScreen onNavigate={navigateToScreen} />;
+      case 'qrScan':
+        return <QRScanScreen onNavigate={navigateToScreen} />;
+      case 'tableOrder':
+        return <TableOrderScreen onNavigate={navigateToScreen} />;
       default:
         return <HomeScreen onNavigate={navigateToScreen} />;
     }
@@ -77,7 +97,9 @@ function AppContent() {
                      currentScreen !== 'orderStatus' &&
                      currentScreen !== 'landing' &&
                      currentScreen !== 'login' &&
-                     currentScreen !== 'register';
+                     currentScreen !== 'register' &&
+                     currentScreen !== 'qrScan' &&
+                     currentScreen !== 'tableOrder';
 
   return (
     <SafeAreaView style={styles.container}>
